@@ -1,3 +1,8 @@
+// TODO: allow multiple rectangles
+// TODO: of different colours // config may not make sense in this case // actually wait - they can change the defaultConfig as it is exported
+// TODO: have the ability to select rectangles to delete them.
+// TODO: have backspace delete the most recent triangle (if mouse is in the canvas).
+
 export interface Rectangle {
     x: number;
     y: number;
@@ -22,10 +27,15 @@ export interface Config {
 
 export interface Api {
     getContext: () => CanvasRenderingContext2D;
+    getConfig: () => Config;
+    setConfig: (newConfig: Config) => void;
+    // TODO: implement the above
     // TODO: get image rectangle coordinates
 }
 
 
+// TODO: how do we expose config to the user? through a context object perhaps?
+// TODO: maybe move config into BOundItCanvas and remove from the parameter list.
 export const defaultConfig = {
     draggingStyle: {
         fillStyle: 'rgba(255, 255, 255, 0)',
