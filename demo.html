@@ -4,9 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BoundIt</title>
-    <script type="module" src="dist/bundle.js"></script>
+    <script type="module">
+      import { BoundItCanvas } from "./dist/boundit.js"
+      const canvas = BoundItCanvas(document.getElementById("boundit"), "assets/smoke.jpg")
+    </script>
   </head>
   <body>
-    <canvas id="glcanvas" width="640" height="480"></canvas>
+    <canvas id="boundit" width="1023" height="682"></canvas>
    </body>
 </html>

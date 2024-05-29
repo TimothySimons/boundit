@@ -7,7 +7,9 @@
         "typescript": "^5.4.5"
     },
     "scripts": {
-        "dist": "esbuild src/tutorialLoadImage.ts --bundle --format=esm --outfile=dist/bundle.js",
+        "build:js": "tsc --sourceMap --declaration",
+        "build:bundle": "esbuild src/boundit.ts --bundle --format=esm --outfile=dist/bundle.js",
+        "dist": "npm run build:js && npm run build:bundle",
         "start": "lite-server --config=local-server.json"
     }
 }
