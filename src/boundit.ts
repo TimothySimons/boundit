@@ -1,130 +1,142 @@
-// TODO: allow multiple rectangles
-// TODO: of different colours // config may not make sense in this case // actually wait - they can change the defaultConfig as it is exported
-// TODO: have the ability to select rectangles to delete them.
-// TODO: have backspace delete the most recent triangle (if mouse is in the canvas).
-
-export interface Box {
+interface Box {
     label: string;
     x: number;
     y: number;
     width: number;
     height: number;
+    state: BoxState;
 }
 
+enum BoxState {
+    Idle,
+    Creating,
+    Moving,
+}
 
-export interface BoxStyle {
+interface Style {
     fillStyle: string;
     strokeStyle: string;
     lineWidth: number;
     lineDash: number[];
 }
 
-
-export interface Config {
-    currentLabel: string;
-    draggingStyle: BoxStyle;
-    defaultStyle: BoxStyle;
-}
-
-
 export interface Api {
-    getConfig: () => Config;
-    setConfig: (newConfig: Config) => void;
-    // TODO: implement the above
-    // TODO: get image rectangle coordinates
+    getLabel: () => string;
+    setLabel: (label: string) => void;
+    getStyle: (state: BoxState) => Style;
+    setStyle: (state: BoxState, style: Style) => void;
+    getBoxes: () => { label: string, x: number, y: number, width: number, height: number }[]
 }
 
+export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): void {
+    const boxStyles: Record<BoxState, Style> = {
+        [BoxState.Idle]: {
+            fillStyle: 'rgba(255, 0, 0, 0.05)',
+            strokeStyle: 'red',
+            lineWidth: 3,
+            lineDash: [],
+        },
+        [BoxState.Creating]: {
+            fillStyle: 'rgba(255, 255, 255, 0)',
+            strokeStyle: 'white',
+            lineWidth: 2,
+            lineDash: [10, 5],
+        },
+        [BoxState.Moving]: {
+            fillStyle: 'rgba(255, 255, 255, 0)',
+            strokeStyle: 'white',
+            lineWidth: 2,
+            lineDash: [],
+        },
+      };
+    let currentLabel: string = '';
+    let selectedBox: Box | null = null;
+    let boxes: Box[] = [];
 
-// TODO: how do we expose config to the user? through a context object perhaps?
-// TODO: maybe move config into BOundItCanvas and remove from the parameter list.
-export const defaultConfig = {
-    currentLabel: '',
-    draggingStyle: {
-        fillStyle: 'rgba(255, 255, 255, 0)',
-        strokeStyle: 'white',
-        lineWidth: 2,
-        lineDash: [],
-    },
-    defaultStyle: {
-        fillStyle: 'rgba(255, 0, 0, 0.05)',
-        strokeStyle: 'red',
-        lineWidth: 3,
-        lineDash: [],
-    },
-};
-
-
-export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string, config: Config = defaultConfig): Api {
     const img = new Image();
     img.src = imgURL;
-
-    let box: Box = {
-        label: '',
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0
-    };
-
     img.onload = function() {
+
         const imgAspectRatio = img.naturalWidth / img.naturalHeight;
         const canvasAspectRatio = canvas.width / canvas.height;
         if (Math.abs(imgAspectRatio - canvasAspectRatio) > 0.01) {
-            throw new Error(`Canvas size is not proportional to the image size:
-            (${canvas.width}, ${canvas.height}) (${img.naturalWidth}, ${img.naturalHeight})`);
+            throw new Error(`Canvas size is not proportional to the image size: (${canvas.width}, ${canvas.height}) (${img.naturalWidth}, ${img.naturalHeight})`);
         }
 
-        redraw(canvas, img)
+        const ctx = canvas.getContext('2d');
+        if (ctx === null) {
+            throw new Error('Canvas 2d context is null.');
+        }
+
+        ctx.drawImage(img, 0, 0);
 
         let mouseStartPos = {x: 0, y: 0}
-        let offset = { x: 0, y: 0 };
-        let isDragging = false;
-        let isDrawing = false;
+        let offset = {x: 0, y: 0}
 
         canvas.addEventListener('mousedown', (e) => {
-            mouseStartPos = getMouseTipPosition(e);
-            if (isOverRectangle(mouseStartPos.x, mouseStartPos.y, box)) {
-                isDragging = true;
-                offset.x = mouseStartPos.x - box.x;
-                offset.y = mouseStartPos.y - box.y;
+            mouseStartPos = getMousePos(e);
+            selectedBox = getBoxAtPos(mouseStartPos.x, mouseStartPos.y, boxes);
+            if (selectedBox === null) {
+                selectedBox = {
+                    label: currentLabel,
+                    x: mouseStartPos.x,
+                    y: mouseStartPos.y,
+                    width: 0,
+                    height: 0,
+                    state: BoxState.Creating
+                }
             } else {
-                isDrawing = true;
-                box.x = mouseStartPos.x;
-                box.y = mouseStartPos.y;
+                offset.x = mouseStartPos.x - selectedBox.x;
+                offset.y = mouseStartPos.y - selectedBox.y;
+                selectedBox.state = BoxState.Moving
             }
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            const mousePos = getMouseTipPosition(e);
-            if (isDragging) {
-                box.x = mousePos.x - offset.x
-                box.y = mousePos.y - offset.y
-                redraw(canvas, img, box, config.draggingStyle)
-            } else if (isDrawing) {
-                box.width = getMouseTipPosition(e).x - box.x;
-                box.height = getMouseTipPosition(e).y - box.y;
-                redraw(canvas, img, box, config.draggingStyle)
-        }});
+            const mousePos = getMousePos(e);
+            if (selectedBox === null) {
+                return;
+            } else if (selectedBox.state === BoxState.Creating) {
+                selectedBox.width = mousePos.x - selectedBox.x;
+                selectedBox.height = mousePos.y - selectedBox.y;
+                redraw(ctx, img, [selectedBox, ...boxes], boxStyles)
+            } else if (selectedBox.state === BoxState.Moving) {
+                console.log(mousePos.x, mousePos.y)
+                selectedBox.x = mousePos.x - offset.x
+                selectedBox.y = mousePos.y - offset.y
+                redraw(ctx, img, boxes, boxStyles)
+            }
+        });
 
         canvas.addEventListener('mouseup', (e) => {
-            const mousePos = getMouseTipPosition(e);
-            if (isDragging || isDrawing) {
-                if (!(mousePos.x === mouseStartPos.x && mousePos.y === mouseStartPos.y)) {
-                    redraw(canvas, img, box, config.defaultStyle)
-                }
-                isDragging = false;
-                isDrawing = false;
+            const mouseEndPos = getMousePos(e);
+            if (selectedBox === null) {
+                return;
+            } else if (mouseEndPos.x === mouseStartPos.x && mouseEndPos.y === mouseStartPos.y) {
+                selectedBox.state = BoxState.Idle
+                return;
+            } else if (selectedBox.state === BoxState.Creating) {
+                selectedBox.state = BoxState.Idle
+                normalize(selectedBox)
+                boxes.push(selectedBox)
+                redraw(ctx, img, boxes, boxStyles)
+            } else if (selectedBox.state === BoxState.Moving) {
+                selectedBox.state = BoxState.Idle
+                redraw(ctx, img, boxes, boxStyles)
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace') {
+              boxes.pop();
+              redraw(ctx, img, boxes, boxStyles)
             }
         });
     }
-
-    return {
-        getContext: () => ctx,
-    };
 }
 
 
-function getMouseTipPosition(e: MouseEvent): { x: number, y: number } {
+function getMousePos(e: MouseEvent): { x: number, y: number } {
     const offset = -10
     return {
         x: e.clientX + offset,
@@ -133,37 +145,49 @@ function getMouseTipPosition(e: MouseEvent): { x: number, y: number } {
 }
 
 
-function redraw(canvas: HTMLCanvasElement, img: HTMLImageElement, rectangle?: Box, style:BoxStyle = defaultConfig.defaultStyle) {
-    const ctx = canvas.getContext('2d');
-    if (ctx === null) {
-        throw new Error('Canvas 2d context is null.');
+function getBoxAtPos(x: number, y: number, boxes: Box[]): Box | null {
+    for (let i = boxes.length - 1; i >= 0; i--) {
+      const box = boxes[i];
+      if (
+        x >= box.x &&
+        x <= box.x + box.width &&
+        y >= box.y &&
+        y <= box.y + box.height
+      ) {
+        return box;
+      }
     }
+    return null;
+  }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+function redraw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, boxes: Box[], boxStyles: Record<BoxState, Style>) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(img, 0, 0);
-
-    if (rectangle) {
+    for (const box of boxes) {
+        const style = boxStyles[box.state]
+        // save
         ctx.save();
-
         // style
         ctx.strokeStyle = style.strokeStyle;
         ctx.lineWidth = style.lineWidth;
         ctx.setLineDash(style.lineDash);
         ctx.fillStyle = style.fillStyle;
         // draw
-        ctx.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-        ctx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+        ctx.fillRect(box.x, box.y, box.width, box.height);
+        // restore
         ctx.restore();
     }
 }
 
+function normalize(box: Box): void {
+    const newWidth = Math.abs(box.width);
+    const newHeight = Math.abs(box.height);
+    box.x = box.width < 0 ? box.x + box.width : box.x;
+    box.y = box.height < 0 ? box.y + box.height : box.y;
+    box.width = newWidth;
+    box.height = newHeight;
+}
 
-function isOverRectangle(x: number, y: number, rectangle: Box) {
-    return (
-      x >= rectangle.x &&
-      x <= rectangle.x + rectangle.width &&
-      y >= rectangle.y &&
-      y <= rectangle.y + rectangle.height
-    );
-  }
+
