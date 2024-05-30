@@ -3,7 +3,8 @@
 // TODO: have the ability to select rectangles to delete them.
 // TODO: have backspace delete the most recent triangle (if mouse is in the canvas).
 
-export interface Rectangle {
+export interface Box {
+    label: string;
     x: number;
     y: number;
     width: number;
@@ -11,7 +12,7 @@ export interface Rectangle {
 }
 
 
-export interface RectangleStyle {
+export interface BoxStyle {
     fillStyle: string;
     strokeStyle: string;
     lineWidth: number;
@@ -20,13 +21,13 @@ export interface RectangleStyle {
 
 
 export interface Config {
-    draggingStyle: RectangleStyle;
-    defaultStyle: RectangleStyle;
+    currentLabel: string;
+    draggingStyle: BoxStyle;
+    defaultStyle: BoxStyle;
 }
 
 
 export interface Api {
-    getContext: () => CanvasRenderingContext2D;
     getConfig: () => Config;
     setConfig: (newConfig: Config) => void;
     // TODO: implement the above
@@ -37,6 +38,7 @@ export interface Api {
 // TODO: how do we expose config to the user? through a context object perhaps?
 // TODO: maybe move config into BOundItCanvas and remove from the parameter list.
 export const defaultConfig = {
+    currentLabel: '',
     draggingStyle: {
         fillStyle: 'rgba(255, 255, 255, 0)',
         strokeStyle: 'white',
@@ -53,21 +55,16 @@ export const defaultConfig = {
 
 
 export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string, config: Config = defaultConfig): Api {
-    const ctx = canvas.getContext('2d');
-    if (ctx === null) {
-        throw new Error('Canvas 2d context is null.');
-    }
-
     const img = new Image();
     img.src = imgURL;
 
-    let rectangle: Rectangle = {
+    let box: Box = {
+        label: '',
         x: 0,
         y: 0,
         width: 0,
         height: 0
     };
-
 
     img.onload = function() {
         const imgAspectRatio = img.naturalWidth / img.naturalHeight;
@@ -77,32 +74,46 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string, config:
             (${canvas.width}, ${canvas.height}) (${img.naturalWidth}, ${img.naturalHeight})`);
         }
 
-        const scaleWidth = canvas.width / img.naturalWidth;
-        const scaleHeight = canvas.height / img.naturalHeight;
-        ctx.drawImage(img, 0, 0, img.naturalWidth * scaleWidth, img.naturalHeight * scaleHeight);
+        redraw(canvas, img)
 
+        let mouseStartPos = {x: 0, y: 0}
+        let offset = { x: 0, y: 0 };
+        let isDragging = false;
         let isDrawing = false;
-        let offset = -10
 
         canvas.addEventListener('mousedown', (e) => {
-            isDrawing = true;
-            rectangle.x = e.clientX + offset;
-            rectangle.y = e.clientY + offset;
+            mouseStartPos = getMouseTipPosition(e);
+            if (isOverRectangle(mouseStartPos.x, mouseStartPos.y, box)) {
+                isDragging = true;
+                offset.x = mouseStartPos.x - box.x;
+                offset.y = mouseStartPos.y - box.y;
+            } else {
+                isDrawing = true;
+                box.x = mouseStartPos.x;
+                box.y = mouseStartPos.y;
+            }
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            if (isDrawing) {
-                rectangle.width = e.clientX + offset - rectangle.x;
-                rectangle.height = e.clientY + offset - rectangle.y;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
-                drawRectangle(ctx, rectangle, config.draggingStyle)
+            const mousePos = getMouseTipPosition(e);
+            if (isDragging) {
+                box.x = mousePos.x - offset.x
+                box.y = mousePos.y - offset.y
+                redraw(canvas, img, box, config.draggingStyle)
+            } else if (isDrawing) {
+                box.width = getMouseTipPosition(e).x - box.x;
+                box.height = getMouseTipPosition(e).y - box.y;
+                redraw(canvas, img, box, config.draggingStyle)
         }});
 
         canvas.addEventListener('mouseup', (e) => {
-            isDrawing = false;
-            if (!(e.clientX + offset === rectangle.x && e.clientY + offset === rectangle.y)) {
-                drawRectangle(ctx, rectangle, config.defaultStyle);
+            const mousePos = getMouseTipPosition(e);
+            if (isDragging || isDrawing) {
+                if (!(mousePos.x === mouseStartPos.x && mousePos.y === mouseStartPos.y)) {
+                    redraw(canvas, img, box, config.defaultStyle)
+                }
+                isDragging = false;
+                isDrawing = false;
             }
         });
     }
@@ -113,18 +124,46 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string, config:
 }
 
 
-function drawRectangle(ctx: CanvasRenderingContext2D, rectangle: Rectangle, style: RectangleStyle) {
-    ctx.save();
-
-    // style
-    ctx.strokeStyle = style.strokeStyle;
-    ctx.lineWidth = style.lineWidth;
-    ctx.setLineDash(style.lineDash);
-    ctx.fillStyle = style.fillStyle;
-
-    // draw
-    ctx.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-    ctx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-
-    ctx.restore();
+function getMouseTipPosition(e: MouseEvent): { x: number, y: number } {
+    const offset = -10
+    return {
+        x: e.clientX + offset,
+        y: e.clientY + offset,
+    }
 }
+
+
+function redraw(canvas: HTMLCanvasElement, img: HTMLImageElement, rectangle?: Box, style:BoxStyle = defaultConfig.defaultStyle) {
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) {
+        throw new Error('Canvas 2d context is null.');
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+
+    if (rectangle) {
+        ctx.save();
+
+        // style
+        ctx.strokeStyle = style.strokeStyle;
+        ctx.lineWidth = style.lineWidth;
+        ctx.setLineDash(style.lineDash);
+        ctx.fillStyle = style.fillStyle;
+        // draw
+        ctx.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+        ctx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+
+        ctx.restore();
+    }
+}
+
+
+function isOverRectangle(x: number, y: number, rectangle: Box) {
+    return (
+      x >= rectangle.x &&
+      x <= rectangle.x + rectangle.width &&
+      y >= rectangle.y &&
+      y <= rectangle.y + rectangle.height
+    );
+  }
