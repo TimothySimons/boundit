@@ -4,14 +4,20 @@ interface Box {
     y: number;
     width: number;
     height: number;
+}
+
+
+interface CanvasBox extends Box {
     state: BoxState;
 }
+
 
 enum BoxState {
     Idle,
     Creating,
     Moving,
 }
+
 
 interface Style {
     fillStyle: string;
@@ -20,15 +26,17 @@ interface Style {
     lineDash: number[];
 }
 
+
 export interface Api {
     getLabel: () => string;
     setLabel: (label: string) => void;
     getStyle: (state: BoxState) => Style;
     setStyle: (state: BoxState, style: Style) => void;
-    getBoxes: () => { label: string, x: number, y: number, width: number, height: number }[]
+    getBoxes: () => Box[]
 }
 
-export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): void {
+
+export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): Api {
     const boxStyles: Record<BoxState, Style> = {
         [BoxState.Idle]: {
             fillStyle: 'rgba(255, 0, 0, 0.05)',
@@ -49,9 +57,10 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): void {
             lineDash: [],
         },
       };
+
     let currentLabel: string = '';
-    let selectedBox: Box | null = null;
-    let boxes: Box[] = [];
+    let selectedBox: CanvasBox | null = null;
+    let boxes: CanvasBox[] = [];
 
     const img = new Image();
     img.src = imgURL;
@@ -133,6 +142,14 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): void {
             }
         });
     }
+
+    return {
+        getLabel() { return currentLabel; },
+        setLabel(label: string) { currentLabel = label; },
+        getStyle(state: BoxState) { return boxStyles[state]; },
+        setStyle(state: BoxState, style: Style) { boxStyles[state] = style; },
+        getBoxes() { return boxes.map((box) => canvasBoxToImageBox(box, img, canvas)); }
+    }
 }
 
 
@@ -145,7 +162,7 @@ function getMousePos(e: MouseEvent): { x: number, y: number } {
 }
 
 
-function getBoxAtPos(x: number, y: number, boxes: Box[]): Box | null {
+function getBoxAtPos(x: number, y: number, boxes: CanvasBox[]): CanvasBox | null {
     for (let i = boxes.length - 1; i >= 0; i--) {
       const box = boxes[i];
       if (
@@ -161,7 +178,7 @@ function getBoxAtPos(x: number, y: number, boxes: Box[]): Box | null {
   }
 
 
-function redraw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, boxes: Box[], boxStyles: Record<BoxState, Style>) {
+function redraw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, boxes: CanvasBox[], boxStyles: Record<BoxState, Style>) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(img, 0, 0);
     for (const box of boxes) {
@@ -181,7 +198,8 @@ function redraw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, boxes: Box
     }
 }
 
-function normalize(box: Box): void {
+
+function normalize(box: CanvasBox): void {
     const newWidth = Math.abs(box.width);
     const newHeight = Math.abs(box.height);
     box.x = box.width < 0 ? box.x + box.width : box.x;
@@ -191,3 +209,14 @@ function normalize(box: Box): void {
 }
 
 
+function canvasBoxToImageBox(box: CanvasBox, img: HTMLImageElement, canvas: HTMLCanvasElement): Box {
+  const scaleFactorX = img.naturalWidth / canvas.width;
+  const scaleFactorY = img.naturalHeight / canvas.height;
+  return {
+    label: box.label,
+    x: box.x * scaleFactorX,
+    y: box.y * scaleFactorY,
+    width: box.width * scaleFactorX,
+    height: box.height * scaleFactorY,
+  };
+}
