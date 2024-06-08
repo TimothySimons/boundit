@@ -1,3 +1,6 @@
+const LABEL_FONT = 'Montserrat';
+const LABEL_FONT_SIZE = 12;
+
 interface Box {
   label: string;
   x: number;
@@ -36,19 +39,19 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): Api {
     [BoxState.Idle]: {
       fillStyle: 'rgba(255, 0, 0, 0.05)',
       strokeStyle: 'red',
-      lineWidth: 3,
+      lineWidth: 1,
       lineDash: [],
     },
     [BoxState.Creating]: {
       fillStyle: 'rgba(255, 255, 255, 0)',
-      strokeStyle: 'white',
-      lineWidth: 2,
+      strokeStyle: 'red',
+      lineWidth: 1,
       lineDash: [10, 5],
     },
     [BoxState.Moving]: {
       fillStyle: 'rgba(255, 255, 255, 0)',
       strokeStyle: 'white',
-      lineWidth: 2,
+      lineWidth: 1,
       lineDash: [],
     },
   };
@@ -106,7 +109,6 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): Api {
         selectedBox.height = mousePos.y - selectedBox.y;
         redraw(ctx, img, [selectedBox, ...boxes], boxStyles);
       } else if (selectedBox.state === BoxState.Moving) {
-        console.log(mousePos.x, mousePos.y);
         selectedBox.x = mousePos.x - offset.x;
         selectedBox.y = mousePos.y - offset.y;
         redraw(ctx, img, boxes, boxStyles);
@@ -196,6 +198,21 @@ function redraw(
     // draw
     ctx.strokeRect(box.x, box.y, box.width, box.height);
     ctx.fillRect(box.x, box.y, box.width, box.height);
+    // label
+    console.log(box.label);
+    if (box.label !== '' && (box.state === BoxState.Idle || box.state === BoxState.Moving)) {
+      const padding = 5;
+      ctx.font = `${LABEL_FONT_SIZE}px ${LABEL_FONT}`;
+      ctx.fillStyle = style.strokeStyle;
+      const text = ctx.measureText(box.label);
+      const textWidth = text.actualBoundingBoxRight + text.actualBoundingBoxLeft;
+      const textHeight = text.actualBoundingBoxDescent + text.actualBoundingBoxAscent;
+      ctx.fillRect(box.x, box.y, textWidth + padding, textHeight + padding);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = style.strokeStyle === 'white' ? 'black' : 'white';
+      ctx.fillText(box.label, box.x + (textWidth + padding) / 2, box.y + (textHeight + padding) / 2);
+    }
     // restore
     ctx.restore();
   }

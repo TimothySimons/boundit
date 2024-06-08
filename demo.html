@@ -6,7 +6,8 @@
     <title>BoundIt</title>
     <script type="module">
       import { BoundItCanvas } from './dist/boundit.js';
-      const canvas = BoundItCanvas(document.getElementById('boundit'), 'assets/smoke.jpg');
+      const api = BoundItCanvas(document.getElementById('boundit'), 'assets/smoke.jpg');
+      api.setLabel('smoke');
     </script>
   </head>
   <body>
