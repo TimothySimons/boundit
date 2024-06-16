@@ -81,6 +81,14 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): Api {
     let mouseStartPos = { x: 0, y: 0 };
     const offset = { x: 0, y: 0 };
 
+    canvas.addEventListener('mouseover', () => {
+      canvas.style.cursor = 'crosshair';
+    });
+
+    canvas.addEventListener('mouseout', () => {
+      canvas.style.cursor = 'default';
+    });
+
     canvas.addEventListener('mousedown', e => {
       mouseStartPos = getMousePos(e);
       selectedBox = getBoxAtPos(mouseStartPos.x, mouseStartPos.y, boxes);
@@ -102,6 +110,12 @@ export function BoundItCanvas(canvas: HTMLCanvasElement, imgURL: string): Api {
 
     canvas.addEventListener('mousemove', e => {
       const mousePos = getMousePos(e);
+      if (getBoxAtPos(mousePos.x, mousePos.y, boxes)) {
+        canvas.style.cursor = 'move';
+      } else {
+        canvas.style.cursor = 'crosshair';
+      }
+
       if (selectedBox === null) {
         return;
       } else if (selectedBox.state === BoxState.Creating) {
